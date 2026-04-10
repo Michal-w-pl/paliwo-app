@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PaliwoKalk — Kalkulator kosztów paliwa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f3ee; --surface: #ffffff; --surface2: #f0ede8;
+    --border: rgba(0,0,0,0.08); --border-strong: rgba(0,0,0,0.15);
+    --text: #1a1816; --text2: #6b6760; --text3: #9c9891;
+    --accent: #2d5a3d; --accent-light: #e8f0eb;
+    --accent2: #c94a1e; --accent2-light: #fceee9;
+    --radius: 12px; --radius-sm: 8px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04);
+    --shadow-md: 0 2px 8px rgba(0,0,0,0.08),0 8px 32px rgba(0,0,0,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#141210; --surface:#1e1c1a; --surface2:#252320;
+      --border:rgba(255,255,255,0.07); --border-strong:rgba(255,255,255,0.12);
+      --text:#f0ede8; --text2:#a09d98; --text3:#6b6860;
+      --accent:#5a9e72; --accent-light:#1a2e20;
+      --accent2:#e8724a; --accent2-light:#2e1a14;
+    }
+  }
+  html { scroll-behavior: smooth; }
+  body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; line-height:1.6; }
+
+  header { background:var(--surface); border-bottom:1px solid var(--border); padding:0 1.5rem; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:1000px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; height:56px; }
+  .logo { font-size:18px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:8px; }
+  .logo-dot { width:8px; height:8px; background:var(--accent); border-radius:50%; }
+  .update-badge { font-size:11px; font-family:'DM Mono',monospace; background:var(--accent-light); color:var(--accent); padding:4px 10px; border-radius:20px; font-weight:500; }
+
+  main { max-width:1000px; margin:0 auto; padding:2rem 1.5rem 4rem; }
+  .section-label { font-size:10px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--text3); margin-bottom:14px; }
+
+  /* Fuel cards */
+  .fuel-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:6px; }
+  @media(max-width:700px){.fuel-grid{grid-template-columns:repeat(2,1fr);}}
+  @media(max-width:380px){.fuel-grid{grid-template-columns:1fr;}}
+  .fuel-card { background:var(--surface); border:1.5px solid var(--border); border-radius:var(--radius); padding:14px 16px; cursor:pointer; transition:border-color .18s,box-shadow .18s,transform .12s; position:relative; overflow:hidden; }
+  .fuel-card::before { content:''; position:absolute; top:0;left:0;right:0; height:3px; background:var(--fc-color,transparent); opacity:0; transition:opacity .18s; }
+  .fuel-card:hover { border-color:var(--border-strong); box-shadow:var(--shadow); }
+  .fuel-card.active { border-color:var(--fc-color,var(--accent)); box-shadow:var(--shadow-md); transform:translateY(-1px); }
+  .fuel-card.active::before { opacity:1; }
+  .fc-icon { font-size:20px; margin-bottom:8px; line-height:1; }
+  .fc-name { font-size:11px; color:var(--text2); margin-bottom:4px; font-weight:500; }
+  .fc-price { font-size:24px; font-weight:600; font-family:'DM Mono',monospace; line-height:1; }
+  .fc-unit { font-size:11px; color:var(--text3); margin-top:2px; }
+  .fc-custom-wrap { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); display:none; }
+  .fuel-card.active .fc-custom-wrap { display:block; }
+  .fc-custom-wrap label { font-size:11px; color:var(--text3); display:block; margin-bottom:4px; }
+  .fc-custom-wrap input { width:100%; }
+
+  /* Loading skeleton */
+  .skeleton { background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%); background-size:200% 100%; animation: shimmer 1.4s infinite; border-radius:4px; }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  .fc-price.loading { color:transparent; }
+  .fc-price.loading::after { content:''; display:inline-block; width:60px; height:22px; vertical-align:middle; }
+
+  .price-note { font-size:12px; color:var(--text3); margin-bottom:2rem; line-height:1.5; }
+  .price-note a { color:var(--accent); text-decoration:none; }
+  .price-note a:hover { text-decoration:underline; }
+  .source-info { font-size:11px; color:var(--text3); font-family:'DM Mono',monospace; }
+
+  /* Tabs */
+  .tabs { display:flex; gap:4px; background:var(--surface2); border-radius:var(--radius); padding:4px; margin-bottom:1.5rem; width:fit-content; }
+  .tab-btn { padding:8px 20px; border:none; border-radius:calc(var(--radius) - 2px); background:transparent; font-family:'DM Sans',sans-serif; font-size:14px; font-weight:500; color:var(--text2); cursor:pointer; transition:background .15s,color .15s; }
+  .tab-btn.active { background:var(--surface); color:var(--text); box-shadow:var(--shadow); }
+
+  /* Form */
+  input[type="number"], input[type="text"], select {
+    width:100%; padding:10px 12px; font-family:'DM Sans',sans-serif; font-size:14px;
+    background:var(--surface); color:var(--text); border:1.5px solid var(--border);
+    border-radius:var(--radius-sm); outline:none; transition:border-color .15s; -moz-appearance:textfield;
+  }
+  input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; }
+  input:focus, select:focus { border-color:var(--accent); }
+  label.field-label { display:block; font-size:12px; color:var(--text2); margin-bottom:5px; font-weight:500; }
+  .field { display:flex; flex-direction:column; }
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
+  @media(max-width:480px){.form-grid{grid-template-columns:1fr;}}
+
+  /* Card */
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px 24px; box-shadow:var(--shadow); margin-bottom:1rem; }
+  @media(max-width:600px){.card{padding:16px;}}
+
+  /* Metrics */
+  .metrics-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin:1.25rem 0; }
+  .metric { background:var(--surface2); border-radius:var(--radius-sm); padding:14px 16px; }
+  .metric-label { font-size:11px; color:var(--text3); font-weight:500; margin-bottom:4px; text-transform:uppercase; letter-spacing:.05em; }
+  .metric-val { font-size:26px; font-weight:600; font-family:'DM Mono',monospace; line-height:1; color:var(--text); }
+  .metric-unit { font-size:12px; color:var(--text2); margin-top:2px; }
+  .metric.highlight { background:var(--accent-light); }
+  .metric.highlight .metric-val { color:var(--accent); }
+  .divider { border:none; border-top:1px solid var(--border); margin:1.25rem 0; }
+
+  /* Comparison */
+  .compare-vehicle { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 20px; margin-bottom:10px; box-shadow:var(--shadow); animation:slideIn .2s ease; }
+  @keyframes slideIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+  .vehicle-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .vehicle-num { font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:.08em; }
+  .remove-btn { background:none; border:none; cursor:pointer; color:var(--text3); font-size:18px; line-height:1; padding:2px 6px; border-radius:6px; transition:background .12s,color .12s; }
+  .remove-btn:hover { background:var(--accent2-light); color:var(--accent2); }
+  .vehicle-fields { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:10px; }
+  @media(max-width:600px){.vehicle-fields{grid-template-columns:1fr 1fr;}}
+  @media(max-width:380px){.vehicle-fields{grid-template-columns:1fr;}}
+  .add-vehicle-btn { display:flex; align-items:center; gap:8px; padding:12px 20px; background:var(--surface); border:1.5px dashed var(--border-strong); border-radius:var(--radius); font-family:'DM Sans',sans-serif; font-size:14px; font-weight:500; color:var(--text2); cursor:pointer; width:100%; justify-content:center; transition:background .15s,border-color .15s,color .15s; margin-bottom:1.5rem; }
+  .add-vehicle-btn:hover { background:var(--surface2); border-color:var(--accent); color:var(--accent); }
+
+  .cmp-result-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px 24px; margin-top:1rem; box-shadow:var(--shadow); }
+  .cmp-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; flex-wrap:wrap; gap:10px; }
+  .cmp-dist-row { display:flex; align-items:center; gap:10px; }
+  .cmp-dist-row label { font-size:13px; color:var(--text2); white-space:nowrap; }
+  .cmp-dist-row input { width:120px; }
+  .bar-item { margin-bottom:14px; }
+  .bar-meta { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:5px; flex-wrap:wrap; gap:4px; }
+  .bar-name { font-size:14px; font-weight:500; }
+  .bar-sub { font-size:12px; color:var(--text3); margin-left:6px; }
+  .bar-cost { font-size:18px; font-weight:600; font-family:'DM Mono',monospace; }
+  .bar-track { height:8px; background:var(--surface2); border-radius:4px; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:4px; transition:width .4s cubic-bezier(.4,0,.2,1); }
+  .badge-best { display:inline-block; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; background:var(--accent-light); color:var(--accent); padding:2px 8px; border-radius:20px; margin-left:8px; vertical-align:middle; }
+
+  .empty-state { text-align:center; padding:3rem 1rem; color:var(--text3); }
+  .empty-state p { font-size:15px; margin-top:8px; }
+
+  footer { text-align:center; padding:2rem 1.5rem; border-top:1px solid var(--border); font-size:12px; color:var(--text3); line-height:1.7; }
+  footer a { color:var(--text2); text-decoration:none; }
+  footer a:hover { color:var(--accent); }
+
+  /* Error banner */
+  .error-banner { background:var(--accent2-light); color:var(--accent2); border:1px solid var(--accent2); border-radius:var(--radius-sm); padding:10px 14px; font-size:13px; margin-bottom:1rem; display:none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <a class="logo" href="#"><span class="logo-dot"></span>PaliwoKalk</a>
+    <span class="update-badge" id="updateBadge">ładowanie…</span>
+  </div>
+</header>
+
+<main>
+  <div class="error-banner" id="errorBanner"></div>
+
+  <div class="section-label">Aktualne ceny paliw — Polska</div>
+  <div class="fuel-grid" id="fuelGrid">
+    <div class="fuel-card" data-fuel="pb95" style="--fc-color:#2d5a3d" onclick="selectFuel('pb95',this)">
+      <div class="fc-icon">⛽</div><div class="fc-name">Benzyna Pb95</div>
+      <div class="fc-price" id="disp-pb95">—</div><div class="fc-unit">zł / litr</div>
+      <div class="fc-custom-wrap"><label>Własna cena (zł/l)</label>
+        <input type="number" step="0.01" min="1" max="20" id="custom-pb95" oninput="prices.pb95=+this.value;calcMain();renderComparison()"></div>
+    </div>
+    <div class="fuel-card" data-fuel="pb98" style="--fc-color:#1e3a5f" onclick="selectFuel('pb98',this)">
+      <div class="fc-icon">⛽</div><div class="fc-name">Benzyna Pb98</div>
+      <div class="fc-price" id="disp-pb98">—</div><div class="fc-unit">zł / litr</div>
+      <div class="fc-custom-wrap"><label>Własna cena (zł/l)</label>
+        <input type="number" step="0.01" min="1" max="20" id="custom-pb98" oninput="prices.pb98=+this.value;calcMain();renderComparison()"></div>
+    </div>
+    <div class="fuel-card" data-fuel="on" style="--fc-color:#8a5e00" onclick="selectFuel('on',this)">
+      <div class="fc-icon">🚛</div><div class="fc-name">Diesel ON</div>
+      <div class="fc-price" id="disp-on">—</div><div class="fc-unit">zł / litr</div>
+      <div class="fc-custom-wrap"><label>Własna cena (zł/l)</label>
+        <input type="number" step="0.01" min="1" max="20" id="custom-on" oninput="prices.on=+this.value;calcMain();renderComparison()"></div>
+    </div>
+    <div class="fuel-card" data-fuel="lpg" style="--fc-color:#c94a1e" onclick="selectFuel('lpg',this)">
+      <div class="fc-icon">🟠</div><div class="fc-name">LPG (autogaz)</div>
+      <div class="fc-price" id="disp-lpg">—</div><div class="fc-unit">zł / litr</div>
+      <div class="fc-custom-wrap"><label>Własna cena (zł/l)</label>
+        <input type="number" step="0.01" min="1" max="20" id="custom-lpg" oninput="prices.lpg=+this.value;calcMain();renderComparison()"></div>
+    </div>
+    <div class="fuel-card" data-fuel="ev" style="--fc-color:#2d5a3d" onclick="selectFuel('ev',this)">
+      <div class="fc-icon">⚡</div><div class="fc-name">Elektryczny</div>
+      <div class="fc-price" id="disp-ev">—</div><div class="fc-unit">zł / kWh</div>
+      <div class="fc-custom-wrap"><label>Własna cena (zł/kWh)</label>
+        <input type="number" step="0.01" min="0.1" max="5" id="custom-ev" oninput="prices.ev=+this.value;calcMain();renderComparison()"></div>
+    </div>
+  </div>
+  <p class="price-note" id="priceNote">Pobieranie aktualnych cen…</p>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-calc" onclick="switchTab('calc')">Kalkulator</button>
+    <button class="tab-btn" id="tab-cmp" onclick="switchTab('cmp')">Porównywarka</button>
+  </div>
+
+  <!-- KALKULATOR -->
+  <div id="pane-calc">
+    <div id="no-fuel-msg" style="text-align:center;padding:2rem;color:var(--text3);">↑ Wybierz paliwo powyżej, aby rozpocząć obliczenia</div>
+    <div id="calc-content" style="display:none;">
+      <div class="card">
+        <div class="section-label">Parametry trasy</div>
+        <div id="fields-standard">
+          <div class="form-grid">
+            <div class="field"><label class="field-label">Spalanie (l / 100 km)</label><input type="number" step="0.1" min="0.1" max="50" value="7" id="cons" oninput="calcMain()"></div>
+            <div class="field"><label class="field-label">Dystans trasy (km)</label><input type="number" step="1" min="1" max="100000" value="200" id="dist" oninput="calcMain()"></div>
+          </div>
+        </div>
+        <div id="fields-ev" style="display:none;">
+          <div class="form-grid">
+            <div class="field"><label class="field-label">Zużycie energii (kWh / 100 km)</label><input type="number" step="0.1" min="1" max="50" value="18" id="ev-cons" oninput="calcMain()"></div>
+            <div class="field"><label class="field-label">Dystans trasy (km)</label><input type="number" step="1" min="1" max="100000" value="200" id="ev-dist" oninput="calcMain()"></div>
+          </div>
+        </div>
+        <div class="metrics-grid">
+          <div class="metric highlight"><div class="metric-label">Koszt trasy</div><div class="metric-val" id="r-total">—</div><div class="metric-unit">zł</div></div>
+          <div class="metric"><div class="metric-label">Koszt / km</div><div class="metric-val" id="r-perkm">—</div><div class="metric-unit">zł / km</div></div>
+          <div class="metric"><div class="metric-label" id="r-used-label">Zużyte paliwo</div><div class="metric-val" id="r-used">—</div><div class="metric-unit" id="r-used-unit">litrów</div></div>
+        </div>
+        <div class="divider"></div>
+        <div class="section-label">Koszty eksploatacyjne</div>
+        <div class="form-grid">
+          <div class="field"><label class="field-label">Miesięczny przebieg (km)</label><input type="number" step="100" min="100" max="50000" value="1500" id="monthly" oninput="calcMain()"></div>
+          <div class="field"><label class="field-label">Roczny przebieg (km)</label><input type="number" step="100" min="100" max="200000" value="18000" id="yearly" oninput="calcMain()"></div>
+        </div>
+        <div class="metrics-grid">
+          <div class="metric"><div class="metric-label">Koszt miesięczny</div><div class="metric-val" id="r-monthly">—</div><div class="metric-unit">zł / miesiąc</div></div>
+          <div class="metric"><div class="metric-label">Koszt roczny</div><div class="metric-val" id="r-yearly">—</div><div class="metric-unit">zł / rok</div></div>
+          <div class="metric"><div class="metric-label" id="r-yused-label">Roczne zużycie</div><div class="metric-val" id="r-yused">—</div><div class="metric-unit" id="r-yused-unit">l / rok</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PORÓWNYWARKA -->
+  <div id="pane-cmp" style="display:none;">
+    <div class="section-label">Pojazdy do porównania</div>
+    <div id="vehicleList"></div>
+    <button class="add-vehicle-btn" onclick="addVehicle()"><span style="font-size:18px;line-height:1">+</span> Dodaj pojazd</button>
+    <div id="cmpResult" style="display:none;">
+      <div class="cmp-result-card">
+        <div class="cmp-header">
+          <div class="section-label" style="margin:0">Wyniki porównania</div>
+          <div class="cmp-dist-row"><label>Dystans:</label><input type="number" step="10" min="1" max="100000" value="200" id="cmpDist" oninput="renderComparison()"><span style="font-size:13px;color:var(--text2)">km</span></div>
+        </div>
+        <div id="cmpBars"></div>
+      </div>
+    </div>
+    <div id="cmpEmpty" class="empty-state"><div style="font-size:40px">🚗</div><p>Dodaj co najmniej dwa pojazdy, aby porównać koszty</p></div>
+  </div>
+</main>
+
+<footer>
+  <strong>PaliwoKalk</strong> — kalkulator kosztów paliwa · Polska<br>
+  Ceny pobierane automatycznie codziennie ·
+  <a href="https://www.e-petrol.pl" target="_blank" rel="noopener">e-petrol.pl</a> ·
+  <a href="https://cenypaliw.fyi" target="_blank" rel="noopener">cenypaliw.fyi</a><br>
+  <span style="font-size:11px">Dane mają charakter informacyjny. Ceny mogą różnić się w zależności od stacji i regionu.</span>
+</footer>
+
+<script>
+const PRICES_URL = "data/prices.json";
+const fuelNames  = { pb95:"Pb95", pb98:"Pb98", on:"ON", lpg:"LPG", ev:"Elektryczny" };
+const fuelUnits  = { pb95:"l", pb98:"l", on:"l", lpg:"l", ev:"kWh" };
+const fuelColors = { pb95:"#2d5a3d", pb98:"#1e3a5f", on:"#8a5e00", lpg:"#c94a1e", ev:"#2d5a3d" };
+
+let prices = { pb95:6.27, pb98:6.88, on:7.83, lpg:3.74, ev:0.88 };
+let selectedFuel = null;
+let vehicles = [];
+let vCounter = 0;
+
+// ─── Load prices from JSON ───────────────────────────────────────────────────
+async function loadPrices() {
+  try {
+    // Cache-bust: dodaj timestamp, żeby zawsze pobierać świeże dane
+    const r = await fetch(PRICES_URL + "?v=" + Date.now());
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const data = await r.json();
+    prices = { ...prices, ...data.prices };
+
+    // Wyświetl ceny na kartach
+    const fuels = ["pb95","pb98","on","lpg","ev"];
+    fuels.forEach(f => {
+      const el = document.getElementById("disp-" + f);
+      if (el) {
+        el.textContent = prices[f].toFixed(2).replace(".", ",");
+        el.classList.remove("loading");
+      }
+      const inp = document.getElementById("custom-" + f);
+      if (inp) inp.value = prices[f].toFixed(2);
+    });
+
+    // Badge z datą aktualizacji
+    const d = new Date(data.updated);
+    const opts = { day:"numeric", month:"long", year:"numeric" };
+    document.getElementById("updateBadge").textContent =
+      "aktualizacja: " + d.toLocaleDateString("pl-PL", opts);
+
+    // Notatka o źródle
+    const note = document.getElementById("priceNote");
+    if (data.sources) {
+      const src = [...new Set(Object.values(data.sources)
+        .filter(s => !s.includes("stała") && !s.includes("awaryjna")))].join(", ");
+      note.innerHTML = `Ceny detaliczne pobrane automatycznie. Źródła: <strong>${src || "e-petrol.pl"}</strong>. 
+        Kliknij kartę paliwa, aby wybrać i opcjonalnie wpisać własną cenę.`;
+    }
+
+    // Przerysuj jeśli coś było już zaznaczone
+    if (selectedFuel) calcMain();
+
+  } catch (err) {
+    console.warn("Nie udało się pobrać prices.json:", err);
+    // Pokaż banner z błędem
+    const banner = document.getElementById("errorBanner");
+    banner.textContent = "⚠ Nie można pobrać aktualnych cen — używam ostatnich znanych wartości.";
+    banner.style.display = "block";
+    // Ustaw twarde ceny jako fallback
+    ["pb95","pb98","on","lpg","ev"].forEach(f => {
+      const el = document.getElementById("disp-" + f);
+      if (el) el.textContent = prices[f].toFixed(2).replace(".", ",");
+      const inp = document.getElementById("custom-" + f);
+      if (inp) inp.value = prices[f].toFixed(2);
+    });
+    document.getElementById("updateBadge").textContent = "ceny z cache";
+    document.getElementById("priceNote").textContent =
+      "Brak połączenia z danymi — wyświetlane są ostatnio znane ceny. Kliknij kartę, aby wpisać własną cenę.";
+  }
+}
+
+// ─── Fuel selection ──────────────────────────────────────────────────────────
+function selectFuel(fuel, el) {
+  if (selectedFuel === fuel) {
+    el.classList.remove("active"); selectedFuel = null;
+    document.getElementById("no-fuel-msg").style.display = "";
+    document.getElementById("calc-content").style.display = "none"; return;
+  }
+  document.querySelectorAll(".fuel-card").forEach(c => c.classList.remove("active"));
+  el.classList.add("active"); selectedFuel = fuel;
+  document.getElementById("no-fuel-msg").style.display = "none";
+  document.getElementById("calc-content").style.display = "";
+  const isEv = fuel === "ev";
+  document.getElementById("fields-standard").style.display = isEv ? "none" : "";
+  document.getElementById("fields-ev").style.display = isEv ? "" : "none";
+  calcMain();
+}
+
+// ─── Calculator ──────────────────────────────────────────────────────────────
+function calcMain() {
+  if (!selectedFuel) return;
+  const isEv = selectedFuel === "ev";
+  const cons = parseFloat((isEv ? document.getElementById("ev-cons") : document.getElementById("cons")).value) || 0;
+  const dist = parseFloat((isEv ? document.getElementById("ev-dist") : document.getElementById("dist")).value) || 0;
+  const mo   = parseFloat(document.getElementById("monthly").value) || 0;
+  const yr   = parseFloat(document.getElementById("yearly").value) || 0;
+  const p = prices[selectedFuel];
+  const usedTrip = (cons/100)*dist;
+  const costTrip = usedTrip*p;
+  const perKm = dist>0 ? costTrip/dist : 0;
+  const costMo = (cons/100)*mo*p;
+  const costYr = (cons/100)*yr*p;
+  const usedYr = (cons/100)*yr;
+  const unit = isEv ? "kWh" : "l";
+  set("r-total",  fmt(costTrip));
+  set("r-perkm",  fmt(perKm, 3));
+  set("r-used",   fmt(usedTrip, 1));
+  set("r-used-unit", unit);
+  set("r-used-label", isEv ? "Zużyta energia" : "Zużyte paliwo");
+  set("r-monthly", fmt(costMo));
+  set("r-yearly",  fmt(costYr));
+  set("r-yused",   fmt(usedYr, 0));
+  set("r-yused-unit", unit+" / rok");
+  set("r-yused-label", isEv ? "Roczne zużycie energii" : "Roczne zużycie paliwa");
+}
+
+// ─── Tabs ────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  ["calc","cmp"].forEach(t => {
+    document.getElementById("tab-"+t).classList.toggle("active", t===tab);
+    document.getElementById("pane-"+t).style.display = t===tab ? "" : "none";
+  });
+}
+
+// ─── Comparison ──────────────────────────────────────────────────────────────
+function addVehicle() {
+  const id = ++vCounter; vehicles.push(id);
+  const opts = Object.entries(fuelNames).map(([k,v])=>`<option value="${k}">${v}</option>`).join("");
+  const div = document.createElement("div");
+  div.className = "compare-vehicle"; div.id = "vi-"+id;
+  div.innerHTML = `
+    <div class="vehicle-header">
+      <span class="vehicle-num">Pojazd ${id}</span>
+      <button class="remove-btn" onclick="removeVehicle(${id})">✕</button>
+    </div>
+    <div class="vehicle-fields">
+      <div class="field"><label class="field-label">Nazwa pojazdu</label><input type="text" id="vname-${id}" value="Pojazd ${id}" oninput="renderComparison()"></div>
+      <div class="field"><label class="field-label">Rodzaj paliwa</label><select id="vfuel-${id}" onchange="onVehicleFuelChange(${id})">${opts}</select></div>
+      <div class="field"><label class="field-label" id="vcons-label-${id}">Spalanie (l/100km)</label><input type="number" step="0.1" min="0.1" max="50" value="7" id="vcons-${id}" oninput="renderComparison()"></div>
+      <div class="field"><label class="field-label">Cena (zł)</label><input type="number" step="0.01" min="0.01" max="20" id="vprice-${id}" value="${prices.pb95.toFixed(2)}" oninput="renderComparison()"></div>
+    </div>`;
+  document.getElementById("vehicleList").appendChild(div);
+  renderComparison();
+}
+
+function onVehicleFuelChange(id) {
+  const fuel = document.getElementById("vfuel-"+id).value;
+  document.getElementById("vprice-"+id).value = prices[fuel].toFixed(2);
+  const isEv = fuel==="ev";
+  document.getElementById("vcons-label-"+id).textContent = isEv ? "Zużycie (kWh/100km)" : "Spalanie (l/100km)";
+  document.getElementById("vcons-"+id).value = isEv ? 18 : 7;
+  renderComparison();
+}
+
+function removeVehicle(id) {
+  document.getElementById("vi-"+id).remove();
+  vehicles = vehicles.filter(v=>v!==id);
+  renderComparison();
+}
+
+function renderComparison() {
+  document.getElementById("cmpResult").style.display = vehicles.length>=2 ? "" : "none";
+  document.getElementById("cmpEmpty").style.display  = vehicles.length===0 ? "" : "none";
+  if (vehicles.length<2) return;
+  const dist = parseFloat(document.getElementById("cmpDist").value)||200;
+  const results = vehicles.map(id=>{
+    const name  = document.getElementById("vname-"+id)?.value||"Pojazd";
+    const fuel  = document.getElementById("vfuel-"+id)?.value||"pb95";
+    const cons  = parseFloat(document.getElementById("vcons-"+id)?.value)||0;
+    const price = parseFloat(document.getElementById("vprice-"+id)?.value)||prices[fuel];
+    return { id, name, fuel, cons, price, cost:(cons/100)*dist*price };
+  }).sort((a,b)=>a.cost-b.cost);
+  const maxCost = Math.max(...results.map(r=>r.cost),0.01);
+  document.getElementById("cmpBars").innerHTML = results.map((r,i)=>{
+    const pct = Math.round((r.cost/maxCost)*100);
+    const best = i===0;
+    const unit = fuelUnits[r.fuel];
+    const col  = fuelColors[r.fuel];
+    return `<div class="bar-item">
+      <div class="bar-meta">
+        <div>
+          <span class="bar-name">${esc(r.name)}</span>
+          ${best?'<span class="badge-best">najtańszy</span>':""}
+          <span class="bar-sub">${fuelNames[r.fuel]} · ${r.cons} ${unit}/100km · ${r.price.toFixed(2)} zł/${unit}</span>
+        </div>
+        <span class="bar-cost">${fmt(r.cost)} zł</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${col};opacity:${best?1:.55}"></div></div>
+    </div>`;
+  }).join("");
+}
+
+// ─── Utils ───────────────────────────────────────────────────────────────────
+function fmt(n,dec=2){return parseFloat(n.toFixed(dec)).toLocaleString("pl-PL",{minimumFractionDigits:dec,maximumFractionDigits:dec});}
+function set(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+
+// ─── Boot ────────────────────────────────────────────────────────────────────
+loadPrices();
+</script>
+</body>
+</html>
