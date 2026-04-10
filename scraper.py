@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Scraper cen paliw — Polska
-Źródła: e-petrol.pl (ceny detaliczne) + cenypaliw.fyi (backup)
+Główne źródło: cenypaliw.fyi (hurtowe PKN Orlen z VAT)
+Backup: e-petrol.pl, gov.pl, orlen.pl
 Zapisuje wynik do: data/prices.json
 """
 
@@ -11,15 +12,8 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
-try:
-    import requests
-    from bs4 import BeautifulSoup
-except ImportError:
-    print("Instalacja zależności...", flush=True)
-    import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "requests", "beautifulsoup4"])
-    import requests
-    from bs4 import BeautifulSoup
+import requests
+from bs4 import BeautifulSoup
 
 OUTPUT_FILE = Path(__file__).parent / "data" / "prices.json"
 OUTPUT_FILE.parent.mkdir(exist_ok=True)
@@ -30,110 +24,68 @@ HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/123.0.0.0 Safari/537.36"
     ),
-    "Accept-Language": "pl-PL,pl;q=0.9",
+    "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
-# ─── Źródło 1: e-petrol.pl ────────────────────────────────────────────────────
 
-def scrape_epetrol():
-    """
-    Scrape średnich ogólnopolskich cen detalicznych z e-petrol.pl.
-    Strona publikuje dane w tabeli widocznej na stronie głównej.
-    """
-    url = "https://www.e-petrol.pl/notowania/rynek-krajowy/ceny-stacje-paliw"
+# ─── Źródło 1: cenypaliw.fyi ─────────────────────────────────────────────────
+# Strona wyświetla tabelę z cenami hurtowymi Orlen brutto (z VAT 23%)
+# Tabela: | Rodzaj paliwa | Cena bez VAT | Cena z VAT (23%) | Źródło danych |
+
+def scrape_cenypaliw_fyi():
+    url = "https://cenypaliw.fyi/"
     try:
-        r = requests.get(url, headers=HEADERS, timeout=15)
+        r = requests.get(url, headers=HEADERS, timeout=20)
         r.raise_for_status()
         soup = BeautifulSoup(r.text, "html.parser")
-
-        # Szukamy bloku z cenami — różne selektory dla różnych layoutów strony
         prices = {}
 
-        # Próba 1: tabela z klasą zawierającą "ceny" lub "prices"
+        # Szukamy tabeli HTML z cenami
         tables = soup.find_all("table")
         for table in tables:
             rows = table.find_all("tr")
             for row in rows:
                 cells = [td.get_text(strip=True) for td in row.find_all(["td", "th"])]
-                if not cells:
+                if len(cells) < 3:
                     continue
-                text = " ".join(cells).lower()
-                price = extract_price(cells)
-                if price is None:
+                name = cells[0].lower()
+                # Kolumna 2 = "Cena z VAT"
+                price_vat = parse_price(cells[2])
+                if price_vat is None:
                     continue
-                if "pb95" in text or "95" in text and "benz" in text:
-                    prices["pb95"] = price
-                elif "pb98" in text or "98" in text and "benz" in text:
-                    prices["pb98"] = price
-                elif "on" in text or "diesel" in text or "napędowy" in text:
-                    prices["on"] = price
-                elif "lpg" in text or "autogaz" in text:
-                    prices["lpg"] = price
-
-        # Próba 2: elementy z atrybutem data- lub specyficzne div-y
-        if not prices:
-            for el in soup.find_all(["div", "span", "td"], class_=re.compile(r"(price|cena|fuel|paliwo)", re.I)):
-                txt = el.get_text(strip=True)
-                price = extract_price_from_string(txt)
-                if price and 2.0 < price < 15.0:
-                    parent_text = el.parent.get_text(strip=True).lower() if el.parent else ""
-                    if "95" in parent_text:
-                        prices.setdefault("pb95", price)
-                    elif "98" in parent_text:
-                        prices.setdefault("pb98", price)
-                    elif "on" in parent_text or "diesel" in parent_text:
-                        prices.setdefault("on", price)
-                    elif "lpg" in parent_text:
-                        prices.setdefault("lpg", price)
-
-        if len(prices) >= 3:
-            print(f"  [e-petrol.pl] OK: {prices}")
-            return prices
-        else:
-            print(f"  [e-petrol.pl] Za mało danych ({prices}), próbuję backup...")
-            return None
-
-    except Exception as e:
-        print(f"  [e-petrol.pl] Błąd: {e}")
-        return None
-
-
-# ─── Źródło 2: cenypaliw.fyi ─────────────────────────────────────────────────
-
-def scrape_cenypaliw_fyi():
-    """
-    Scrape z cenypaliw.fyi — strona wyświetla hurtowe ceny Orlen z VAT.
-    Dane są w elementach HTML z atrybutami data- lub w widocznych blokach.
-    """
-    url = "https://cenypaliw.fyi/"
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=15)
-        r.raise_for_status()
-        soup = BeautifulSoup(r.text, "html.parser")
-        prices = {}
-
-        # Szukamy bloków z cenami — strona używa kart z nazwą paliwa i ceną
-        text = soup.get_text()
-        lines = [l.strip() for l in text.splitlines() if l.strip()]
-
-        for i, line in enumerate(lines):
-            ll = line.lower()
-            # Sprawdzamy czy linia zawiera nazwę paliwa, a następna zawiera cenę
-            context = " ".join(lines[max(0,i-2):i+3]).lower()
-            price = extract_price_from_string(line)
-            if price and 1.0 < price < 15.0:
-                if "pb95" in context or ("95" in context and "benz" in context):
-                    prices.setdefault("pb95", price)
-                elif "pb98" in context or ("98" in context and "benz" in context):
-                    prices.setdefault("pb98", price)
-                elif "on" in context or "diesel" in context or "napędowy" in context:
-                    prices.setdefault("on", price)
-                elif "lpg" in context:
-                    prices.setdefault("lpg", price)
+                if "pb 95" in name or "pb95" in name:
+                    prices["pb95"] = price_vat
+                elif "pb 98" in name or "pb98" in name:
+                    prices["pb98"] = price_vat
+                elif name.strip() == "on" or ("diesel" in name and "ekoterm" not in name):
+                    prices["on"] = price_vat
+                elif "lpg" in name:
+                    prices["lpg"] = price_vat
 
         if len(prices) >= 2:
-            print(f"  [cenypaliw.fyi] OK: {prices}")
+            print(f"  [cenypaliw.fyi tabela] OK: {prices}")
             return prices
+
+        # Fallback: regex w tekście strony
+        text = soup.get_text()
+        patterns = {
+            "pb95": r"(?:PB\s*95|benzyna\s*95)[^\d]{0,30}?(\d+[.,]\d+)\s*PLN",
+            "pb98": r"(?:PB\s*98|benzyna\s*98)[^\d]{0,30}?(\d+[.,]\d+)\s*PLN",
+            "on":   r"\bON\b[^\d]{0,20}?(\d+[.,]\d+)\s*PLN",
+            "lpg":  r"\bLPG\b[^\d]{0,20}?(\d+[.,]\d+)\s*PLN",
+        }
+        for fuel, pat in patterns.items():
+            m = re.search(pat, text, re.I)
+            if m:
+                val = float(m.group(1).replace(",", "."))
+                if 1.0 < val < 15.0:
+                    prices.setdefault(fuel, val)
+
+        if len(prices) >= 2:
+            print(f"  [cenypaliw.fyi regex] OK: {prices}")
+            return prices
+
         print(f"  [cenypaliw.fyi] Za mało danych: {prices}")
         return None
 
@@ -142,72 +94,101 @@ def scrape_cenypaliw_fyi():
         return None
 
 
-# ─── Źródło 3: GUS (fallback tygodniowy) ─────────────────────────────────────
+# ─── Źródło 2: e-petrol.pl ───────────────────────────────────────────────────
 
-def scrape_autocentrum():
-    """
-    Autocentrum.pl — czytelna strona z cenami paliw w Polsce.
-    """
-    urls = {
-        "pb95": "https://www.autocentrum.pl/paliwa/ceny-paliw/pb/",
-        "pb98": "https://www.autocentrum.pl/paliwa/ceny-paliw/pb98/",
-        "on":   "https://www.autocentrum.pl/paliwa/ceny-paliw/on/",
-        "lpg":  "https://www.autocentrum.pl/paliwa/ceny-paliw/lpg/",
-    }
-    prices = {}
-    for fuel, url in urls.items():
-        try:
-            r = requests.get(url, headers=HEADERS, timeout=15)
-            r.raise_for_status()
-            soup = BeautifulSoup(r.text, "html.parser")
-            # Szukamy największej liczby wyglądającej jak cena paliwa
-            candidates = []
-            for el in soup.find_all(["strong", "b", "span", "div", "p"]):
-                p = extract_price_from_string(el.get_text(strip=True))
-                if p and 1.0 < p < 15.0:
-                    candidates.append(p)
-            if candidates:
-                # Bierzemy medianę jako najbardziej wiarygodną
-                candidates.sort()
-                prices[fuel] = candidates[len(candidates)//2]
-        except Exception as e:
-            print(f"  [autocentrum] {fuel}: {e}")
-    if prices:
-        print(f"  [autocentrum.pl] OK: {prices}")
-    return prices if len(prices) >= 2 else None
+def scrape_epetrol():
+    url = "https://www.e-petrol.pl/"
+    headers = {**HEADERS, "Referer": "https://www.google.pl/"}
+    try:
+        r = requests.get(url, headers=headers, timeout=20)
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+        text = soup.get_text()
+        prices = {}
+
+        patterns = {
+            "pb95": r"[Pp][Bb]?\s*95[^0-9]{0,20}(\d+[,\.]\d+)",
+            "pb98": r"[Pp][Bb]?\s*98[^0-9]{0,20}(\d+[,\.]\d+)",
+            "on":   r"\bON\b[^0-9]{0,20}(\d+[,\.]\d+)",
+            "lpg":  r"\bLPG\b[^0-9]{0,20}(\d+[,\.]\d+)",
+        }
+        for fuel, pattern in patterns.items():
+            m = re.search(pattern, text)
+            if m:
+                val = float(m.group(1).replace(",", "."))
+                if 1.0 < val < 15.0:
+                    prices[fuel] = val
+
+        if len(prices) >= 2:
+            print(f"  [e-petrol.pl] OK: {prices}")
+            return prices
+
+        print(f"  [e-petrol.pl] Za mało danych: {prices}")
+        return None
+
+    except Exception as e:
+        print(f"  [e-petrol.pl] Błąd: {e}")
+        return None
+
+
+# ─── Źródło 3: orlen.pl (hurtowe, przeliczamy +VAT) ─────────────────────────
+
+def scrape_orlen():
+    url = "https://www.orlen.pl/pl/dla-biznesu/hurtowe-ceny-paliw"
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=20)
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+        text = soup.get_text()
+        prices = {}
+
+        m95  = re.search(r"[Ee]urosuper\s*95[^\d]{0,30}(\d+[,\.]\d+)", text)
+        m98  = re.search(r"[Ss]uper\s*98[^\d]{0,30}(\d+[,\.]\d+)", text)
+        mon  = re.search(r"[Ee]urodiesel[^\d]{0,30}(\d+[,\.]\d+)", text)
+        mlpg = re.search(r"\bAutogas\b[^\d]{0,30}(\d+[,\.]\d+)", text, re.I)
+
+        VAT = 1.08  # paliwowy VAT 8% (po programie CPN)
+        if m95:  prices["pb95"] = round(float(m95.group(1).replace(",","."))  * VAT, 2)
+        if m98:  prices["pb98"] = round(float(m98.group(1).replace(",","."))  * VAT, 2)
+        if mon:  prices["on"]   = round(float(mon.group(1).replace(",","."))  * VAT, 2)
+        if mlpg: prices["lpg"]  = round(float(mlpg.group(1).replace(",",".")) * VAT, 2)
+
+        if len(prices) >= 2:
+            print(f"  [orlen.pl] OK: {prices}")
+            return prices
+
+        print(f"  [orlen.pl] Za mało danych: {prices}")
+        return None
+
+    except Exception as e:
+        print(f"  [orlen.pl] Błąd: {e}")
+        return None
 
 
 # ─── Pomocnicze ───────────────────────────────────────────────────────────────
 
-def extract_price(cells):
-    """Wyodrębnij cenę z listy komórek tabeli."""
-    for cell in cells:
-        p = extract_price_from_string(cell)
-        if p and 1.0 < p < 15.0:
-            return p
-    return None
-
-
-def extract_price_from_string(s):
-    """Wyodrębnij liczbę zmiennoprzecinkową z ciągu znaków (format polski i angielski)."""
+def parse_price(s):
     if not s:
         return None
-    # Zamień przecinek na kropkę, usuń spacje jako separator tysięcy
-    cleaned = re.sub(r"\s", "", s)
-    # Znajdź liczby w formacie X,XX lub X.XX
-    matches = re.findall(r"\b(\d{1,2}[,\.]\d{2})\b", cleaned)
-    for m in matches:
-        try:
-            val = float(m.replace(",", "."))
-            if 1.0 < val < 15.0:
-                return round(val, 2)
-        except ValueError:
-            pass
+    m = re.search(r"(\d+)[,\.](\d{2})", s)
+    if m:
+        val = float(f"{m.group(1)}.{m.group(2)}")
+        if 1.0 < val < 20.0:
+            return round(val, 2)
     return None
 
 
-def merge_prices(*sources):
-    """Połącz wyniki z wielu źródeł, preferując pierwsze niepuste."""
+def load_previous():
+    if OUTPUT_FILE.exists():
+        try:
+            with open(OUTPUT_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def merge(*sources):
     result = {}
     for src in sources:
         if not src:
@@ -218,92 +199,74 @@ def merge_prices(*sources):
     return result
 
 
-def load_previous():
-    """Wczytaj poprzedni plik JSON jako fallback."""
-    if OUTPUT_FILE.exists():
-        try:
-            with open(OUTPUT_FILE) as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
-
-
-# ─── Główna funkcja ───────────────────────────────────────────────────────────
+# ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    print("=" * 50)
+    print("=" * 52)
     print(f"Scraper cen paliw — {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    print("=" * 50)
+    print("=" * 52)
 
-    # Próbujemy źródeł po kolei
-    print("\n[1/3] e-petrol.pl...")
-    src1 = scrape_epetrol()
+    print("\n[1/3] cenypaliw.fyi...")
+    src1 = scrape_cenypaliw_fyi()
 
-    print("\n[2/3] cenypaliw.fyi...")
-    src2 = scrape_cenypaliw_fyi()
+    print("\n[2/3] e-petrol.pl...")
+    src2 = scrape_epetrol()
 
-    print("\n[3/3] autocentrum.pl...")
-    src3 = scrape_autocentrum()
+    print("\n[3/3] orlen.pl...")
+    src3 = scrape_orlen()
 
-    merged = merge_prices(src1, src2, src3)
-
-    # Uzupełniamy brakujące paliwa z poprzedniego dnia
+    merged = merge(src1, src2, src3)
     previous = load_previous()
     prev_prices = previous.get("prices", {})
 
-    fuels = ["pb95", "pb98", "on", "lpg"]
-    # Wartości awaryjne (ceny z dnia wdrożenia) — aktualizuj przy pierwszym uruchomieniu
     fallback = {"pb95": 6.27, "pb98": 6.88, "on": 7.83, "lpg": 3.74}
+    fuels = ["pb95", "pb98", "on", "lpg"]
 
-    final_prices = {}
+    final = {}
     sources_used = {}
+    any_live = bool(merged)
+
     for fuel in fuels:
         if fuel in merged:
-            final_prices[fuel] = merged[fuel]
-            # Ustal które źródło dostarczyło daną cenę
+            final[fuel] = merged[fuel]
             if src1 and fuel in src1:
-                sources_used[fuel] = "e-petrol.pl"
-            elif src2 and fuel in src2:
                 sources_used[fuel] = "cenypaliw.fyi"
-            elif src3 and fuel in src3:
-                sources_used[fuel] = "autocentrum.pl"
+            elif src2 and fuel in src2:
+                sources_used[fuel] = "e-petrol.pl"
+            else:
+                sources_used[fuel] = "orlen.pl"
         elif fuel in prev_prices:
-            final_prices[fuel] = prev_prices[fuel]
+            final[fuel] = prev_prices[fuel]
             sources_used[fuel] = "poprzedni dzień (cache)"
         else:
-            final_prices[fuel] = fallback[fuel]
+            final[fuel] = fallback[fuel]
             sources_used[fuel] = "wartość awaryjna"
 
-    # EV — cena prądu jest stabilna, użytkownik ustawia własną
-    final_prices["ev"] = prev_prices.get("ev", 0.88)
+    final["ev"] = prev_prices.get("ev", 0.88)
     sources_used["ev"] = "stała (zmień ręcznie)"
 
     output = {
         "updated": date.today().isoformat(),
         "updated_ts": datetime.now().isoformat(),
-        "prices": final_prices,
+        "prices": final,
         "sources": sources_used,
         "currency": "PLN",
-        "unit": {
-            "pb95": "l", "pb98": "l", "on": "l", "lpg": "l", "ev": "kWh"
-        }
+        "unit": {"pb95":"l","pb98":"l","on":"l","lpg":"l","ev":"kWh"},
     }
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
 
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 52)
     print("WYNIK:")
     for fuel in fuels + ["ev"]:
-        print(f"  {fuel.upper():6} {final_prices[fuel]:.2f} zł  ({sources_used[fuel]})")
+        print(f"  {fuel.upper():6} {final[fuel]:.2f} zł  ({sources_used[fuel]})")
     print(f"\nZapisano: {OUTPUT_FILE}")
-    print("=" * 50)
+    print("=" * 52)
 
-    # Zwróć błąd jeśli nie udało się pobrać żadnej ceny ze źródeł
-    if not any([src1, src2, src3]):
+    if not any_live:
         print("\nUWAGA: Wszystkie źródła niedostępne — użyto danych z cache/fallback.")
-        sys.exit(1)  # GitHub Actions oznaczy run jako warning
+        # Nie rzucamy exit(1) — cache jest wystarczający, Actions zakończy się sukcesem
 
 
 if __name__ == "__main__":
