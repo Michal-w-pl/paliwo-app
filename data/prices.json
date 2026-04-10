@@ -1,26 +1,26 @@
 {
-  "updated": "2026-04-09",
-  "updated_ts": "2026-04-09T07:00:00",
+  "updated": "2026-04-10",
+  "updated_ts": "2026-04-10T09:33:44.537462",
   "prices": {
-    "pb95": 6.27,
-    "pb98": 6.88,
-    "on": 7.83,
-    "lpg": 3.74,
+    "pb95": 6.62,
+    "pb98": 7.3,
+    "on": 8.37,
+    "lpg": 3.84,
     "ev": 0.88
   },
   "sources": {
-    "pb95": "obwieszczenie Ministra Energii",
-    "pb98": "obwieszczenie Ministra Energii",
-    "on":   "obwieszczenie Ministra Energii",
-    "lpg":  "e-petrol.pl",
-    "ev":   "stała (zmień ręcznie)"
+    "pb95": "cenypaliw.fyi",
+    "pb98": "cenypaliw.fyi",
+    "on": "cenypaliw.fyi",
+    "lpg": "e-petrol.pl",
+    "ev": "stała (zmień ręcznie)"
   },
   "currency": "PLN",
   "unit": {
     "pb95": "l",
     "pb98": "l",
-    "on":   "l",
-    "lpg":  "l",
-    "ev":   "kWh"
+    "on": "l",
+    "lpg": "l",
+    "ev": "kWh"
   }
 }
