@@ -1,18 +1,18 @@
 {
   "updated": "2026-04-13",
-  "updated_ts": "2026-04-13T11:13:44.183032",
+  "updated_ts": "2026-04-13T12:14:43.783343",
   "prices": {
-    "pb95": 6.6,
-    "pb98": 7.26,
-    "on": 8.27,
-    "lpg": 3.84,
+    "pb95": 6.14,
+    "pb98": 6.73,
+    "on": 7.68,
+    "lpg": 3.83,
     "ev": 0.88
   },
   "sources": {
-    "pb95": "cenypaliw.fyi",
-    "pb98": "cenypaliw.fyi",
-    "on": "cenypaliw.fyi",
-    "lpg": "e-petrol.pl",
+    "pb95": "e-petrol.pl/notowania",
+    "pb98": "e-petrol.pl/notowania",
+    "on": "e-petrol.pl/notowania",
+    "lpg": "e-petrol.pl/notowania",
     "ev": "stała (zmień ręcznie)"
   },
   "currency": "PLN",
@@ -22,5 +22,6 @@
     "on": "l",
     "lpg": "l",
     "ev": "kWh"
-  }
+  },
+  "note": "Ceny detaliczne maksymalne wg obwieszczenia Ministra Energii (VAT 8%)"
 }
