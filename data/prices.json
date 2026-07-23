@@ -1,6 +1,6 @@
 {
-  "updated": "2026-07-22",
-  "updated_ts": "2026-07-22T07:37:29.747199",
+  "updated": "2026-07-23",
+  "updated_ts": "2026-07-23T07:36:54.140233",
   "prices": {
     "pb95": 7.09,
     "pb98": 7.99,
@@ -9,10 +9,10 @@
     "ev": 0.88
   },
   "sources": {
-    "pb95": "e-petrol.pl/notowania",
-    "pb98": "e-petrol.pl/notowania",
-    "on": "e-petrol.pl/notowania",
-    "lpg": "e-petrol.pl/notowania",
+    "pb95": "poprzedni dzień (cache)",
+    "pb98": "poprzedni dzień (cache)",
+    "on": "poprzedni dzień (cache)",
+    "lpg": "poprzedni dzień (cache)",
     "ev": "stała (zmień ręcznie)"
   },
   "currency": "PLN",
