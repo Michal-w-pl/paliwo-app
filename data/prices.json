@@ -1,18 +1,25 @@
 {
-  "updated": "2026-11-18",
-  "updated_ts": "2026-11-18T13:44:52.320363",
+  "updated": "2026-11-19",
+  "checked": "2026-11-19T11:33:26+00:00",
+  "stale": false,
   "prices": {
-    "pb95": 7.09,
-    "pb98": 7.99,
-    "on": 7.51,
-    "lpg": 3.16,
+    "pb95": 5.93,
+    "pb98": 6.48,
+    "on": 7.46,
+    "lpg": 3.91,
     "ev": 0.88
   },
+  "as_of": {
+    "pb95": "2026-11-19",
+    "pb98": "2026-11-19",
+    "on": "2026-11-19",
+    "lpg": "2026-11-19"
+  },
   "sources": {
-    "pb95": "poprzedni dzień (cache)",
-    "pb98": "poprzedni dzień (cache)",
-    "on": "poprzedni dzień (cache)",
-    "lpg": "poprzedni dzień (cache)",
+    "pb95": "autocentrum.pl",
+    "pb98": "autocentrum.pl",
+    "on": "autocentrum.pl",
+    "lpg": "autocentrum.pl",
     "ev": "stała (zmień ręcznie)"
   },
   "currency": "PLN",
@@ -23,5 +30,5 @@
     "lpg": "l",
     "ev": "kWh"
   },
-  "note": "Ceny detaliczne maksymalne wg obwieszczenia Ministra Energii (VAT 8%)"
+  "note": "Średnie ceny detaliczne paliw w Polsce"
 }
