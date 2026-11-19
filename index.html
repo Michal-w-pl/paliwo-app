@@ -286,18 +286,28 @@ async function loadPrices() {
       if (inp) inp.value = prices[f].toFixed(2);
     });
 
-    // Badge z datą aktualizacji
-    const d = new Date(data.updated);
+    // Badge z datą aktualizacji (data, z której naprawdę pochodzą ceny)
     const opts = { day:"numeric", month:"long", year:"numeric" };
-    document.getElementById("updateBadge").textContent =
-      "aktualizacja: " + d.toLocaleDateString("pl-PL", opts);
+    const d = data.updated ? new Date(data.updated) : null;
+    document.getElementById("updateBadge").textContent = d
+      ? "ceny z dnia: " + d.toLocaleDateString("pl-PL", opts)
+      : "data cen nieznana";
+
+    // Ostrzeżenie, gdy źródła od kilku dni nie dają świeżych cen
+    if (data.stale) {
+      const banner = document.getElementById("errorBanner");
+      banner.textContent = d
+        ? "⚠ Ceny mogą być nieaktualne — ostatnie świeże dane z " + d.toLocaleDateString("pl-PL", opts) + ". Możesz wpisać własną cenę."
+        : "⚠ Ceny mogą być nieaktualne. Możesz wpisać własną cenę.";
+      banner.style.display = "block";
+    }
 
     // Notatka o źródle
     const note = document.getElementById("priceNote");
     if (data.sources) {
       const src = [...new Set(Object.values(data.sources)
-        .filter(s => !s.includes("stała") && !s.includes("awaryjna")))].join(", ");
-      note.innerHTML = `Ceny detaliczne pobrane automatycznie. Źródła: <strong>${src || "e-petrol.pl"}</strong>. 
+        .filter(s => !s.includes("stała") && !s.includes("awaryjna") && !s.includes("poprzednie")))].join(", ");
+      note.innerHTML = `Średnie ceny detaliczne w Polsce, pobierane automatycznie codziennie. Źródło: <strong>${src || "brak świeżych danych"}</strong>.
         Kliknij kartę paliwa, aby wybrać i opcjonalnie wpisać własną cenę.`;
     }
 

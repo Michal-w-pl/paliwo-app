@@ -22,9 +22,12 @@ jobs:
           cache: "pip"
 
       - name: Zainstaluj zależności
-        run: pip install requests beautifulsoup4
+        run: pip install -r requirements.txt
 
-      - name: Uruchom scraper
+      - name: Testy odczytu stron
+        run: python -m unittest discover -s tests -v
+
+      - name: Pobierz ceny
         run: python scraper.py
 
       - name: Sprawdź zmiany
@@ -40,6 +43,6 @@ jobs:
           git commit -m "chore: aktualizacja cen paliw $(date +'%Y-%m-%d')"
           git push
 
-      - name: Brak zmian
-        if: steps.diff.outputs.changed == 'false'
-        run: echo "Ceny bez zmian."
+      # Czerwony znaczek w zakładce Actions (i e-mail od GitHuba), gdy ceny przestają się aktualizować.
+      - name: Czy ceny są aktualne
+        run: python -c "import json,sys; d=json.load(open('data/prices.json')); print('Ceny z dnia', d.get('updated')); sys.exit(1 if d.get('stale') else 0)"
